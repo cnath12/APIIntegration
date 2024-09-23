@@ -23,7 +23,9 @@ class TestFlaskApiUsingCosmosDB(unittest.TestCase):
             'CONTAINER_NAME': 'users',
             'API_KEY': os.getenv('API_KEY'),
             'RATE_LIMIT': 1000,  
-            'RATE_LIMIT_PERIOD': 60
+            'RATE_LIMIT_PERIOD': 60,
+            'BASIC_AUTH_USERNAME': os.getenv('BASIC_AUTH_USERNAME'),
+            'BASIC_AUTH_PASSWORD': os.getenv('BASIC_AUTH_PASSWORD')
         }
         cls.app = create_app(test_config)
         cls.client = cls.app.test_client()
@@ -36,7 +38,10 @@ class TestFlaskApiUsingCosmosDB(unittest.TestCase):
 
     def setUp(self):
         self.api_key = self.app.config['API_KEY']
-        self.basic_auth = base64.b64encode(f"{self.app.config['BASIC_AUTH_USERNAME']}:{self.app.config['BASIC_AUTH_PASSWORD']}".encode()).decode()
+        if self.app.config.get('BASIC_AUTH_USERNAME') and self.app.config.get('BASIC_AUTH_PASSWORD'):
+            self.basic_auth = base64.b64encode(f"{self.app.config['BASIC_AUTH_USERNAME']}:{self.app.config['BASIC_AUTH_PASSWORD']}".encode()).decode()
+        else:
+            self.basic_auth = None
 
     def test_create_item(self):
         new_item = {'name': 'New Test User', 'email': 'newtestuser@example.com'}
@@ -56,6 +61,8 @@ class TestFlaskApiUsingCosmosDB(unittest.TestCase):
         self.assertIsInstance(data, list)
 
     def test_get_items_basic_auth(self):
+        if not self.basic_auth:
+            self.skipTest("Basic auth credentials not set")
         response = self.client.get('/users', headers={'Authorization': f'Basic {self.basic_auth}'})
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
