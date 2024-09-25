@@ -24,18 +24,19 @@ class Auth:
             return decorated_function
         return decorator
 
-    # def check_api_key(self, app):
-    #     return request.headers.get('X-API-Key') == app.config['API_KEY']
     def check_api_key(self):
         api_key = request.headers.get('X-API-Key')
         if api_key is None:
             return False
-        return api_key == self.app.config['API_KEY']
+        result = api_key == self.app.config['API_KEY']
+        return result
 
     def check_basic_auth(self):
         auth = request.authorization
         if not auth:
+            print("No authorization header found")
             return False
-        return auth.username == self.app.config['BASIC_AUTH_USERNAME'] and \
-               auth.password == self.app.config['BASIC_AUTH_PASSWORD']
+        result = auth.username == self.app.config['BASIC_AUTH_USERNAME'] and \
+                 auth.password == self.app.config['BASIC_AUTH_PASSWORD']
+        return result
         

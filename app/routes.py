@@ -19,44 +19,52 @@ def init_routes(cosmos_client, auth, limiter):
                 retry=tenacity.retry_if_exception_type(Exception)
             )(func)(*args, **kwargs)
         return wrapper
-
+        
     @bp.route('/users', methods=['GET'])
     @auth.require_auth('any')
     @limiter.limit("100/minute")
     def get_users():
-        try:
-            limit = request.args.get('limit', default=100, type=int)
-            offset = request.args.get('offset', type=int)
-            continuation_token = request.args.get('continuation_token')
-            users, next_continuation_token = cosmos_client.get_all_items(
-                limit=limit,
-                offset=offset,
-                continuation_token=continuation_token
-            )
-            response = {
-                'users': users,
-                'limit': limit,
-            }
-            if next_continuation_token:
-                response['next_page'] = url_for(
-                    'users.get_users',
-                    limit=limit,
-                    continuation_token=next_continuation_token,
-                    _external=True
-                )
-            elif offset is not None:
-                next_offset = offset + len(users)
-                if len(users) == limit:  # There might be more items
-                    response['next_page'] = url_for(
-                        'users.get_users',
-                        limit=limit,
-                        offset=next_offset,
-                        _external=True
-                    )
-            return jsonify(response), 200
-        except Exception as e:
-            current_app.logger.error(f"Error in get_users: {str(e)}")
-            return jsonify({"error": "Internal server error"}), 500
+            try:
+                users = cosmos_client.get_all_items()
+                return jsonify(users), 200
+            except Exception as e:
+                current_app.logger.error(f"Error in get_users: {str(e)}")
+                return jsonify({"error": "Internal server error"}), 500
+
+    # @bp.route('/users', methods=['GET'])
+    # @auth.require_auth('any')
+    # @limiter.limit("100/minute")
+    # def get_users():
+    #     try:
+    #         limit = request.args.get('limit', default=100, type=int)
+    #         offset = request.args.get('offset', type=int)
+    #         continuation_token = request.args.get('continuation_token')
+    #         users = cosmos_client.get_all_items() 
+            
+    #         response = {
+    #             'users': users[:limit],
+    #             'limit': limit,
+    #         }
+    #         if len(users)>limit:
+    #             if(continuation_token):
+    #                 response['next_page'] = url_for(
+    #                     'users.get_users',
+    #                     limit=limit,
+    #                     continuation_token=next_continuation_token,
+    #                     _external=True
+    #                 )
+    #         elif offset is not None:
+    #             next_offset = offset + limit
+    #             response['next_page'] = url_for(
+    #                 'users.get_users',
+    #                 limit=limit,
+    #                 offset=next_offset,
+    #                 _external=True
+    #             )
+    #         return jsonify(response), 200
+    #     except Exception as e:
+    #         current_app.logger.error(f"Error in get_users: {str(e)}")
+    #         return jsonify({"error": "Internal server error"}), 500
 
 
     @bp.route('/users', methods=['POST'])

@@ -21,32 +21,10 @@ class CosmosDBClient:
         stop=tenacity.stop_after_attempt(5),
         retry=tenacity.retry_if_exception_type(Exception)
     )
-    def get_all_items(self, limit=100, offset=None, continuation_token=None):
-        if continuation_token:
-            query = "SELECT * FROM c"
-            results = list(self.container.query_items(
-                query=query,
-                enable_cross_partition_query=True,
-                max_item_count=limit,
-                continuation_token=continuation_token
-            ))
-            return results, self.container.client_connection.last_response_headers.get('x-ms-continuation')
-        elif offset is not None:
-            query = f"SELECT * FROM c OFFSET {offset}"
-            results = list(self.container.query_items(
-                query=query,
-                enable_cross_partition_query=True,
-                max_item_count=limit
-            ))
-            return results, None
-        else:
-            query = "SELECT * FROM c"
-            results = list(self.container.query_items(
-                query=query,
-                enable_cross_partition_query=True,
-                max_item_count=limit
-            ))
-            return results, self.container.client_connection.last_response_headers.get('x-ms-continuation')
+    def get_all_items(self):
+        query = "SELECT * FROM c"
+        items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
+        return items
 
     @tenacity.retry(
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
