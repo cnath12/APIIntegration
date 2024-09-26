@@ -1,15 +1,18 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import base64
+import json
 from app import create_app
 from app.auth import Auth
 from app.cosmos_db_client import CosmosDBClient
+from flask_jwt_extended import create_access_token
 
 class TestAuth(unittest.TestCase):
     @classmethod
     @patch('app.cosmos_db_client.CosmosClient')
     @patch('flask_limiter.Limiter')
-    def setUpClass(cls, mock_limiter, mock_cosmos_client):
+    @patch('authlib.integrations.flask_client.OAuth')
+    def setUpClass(cls, mock_oauth, mock_limiter, mock_cosmos_client):
         test_config = {
             'TESTING': True,
             'API_KEY': 'test_api_key',
@@ -18,10 +21,19 @@ class TestAuth(unittest.TestCase):
             'COSMOS_ENDPOINT': 'https://test.documents.azure.com:443/',
             'COSMOS_KEY': 'test_key',
             'DATABASE_NAME': 'test_db',
-            'CONTAINER_NAME': 'test_container'
+            'CONTAINER_NAME': 'test_container',
+            'JWT_SECRET_KEY': 'test_jwt_secret',
+            'GITHUB_CLIENT_ID': 'test_github_client_id',
+            'GITHUB_CLIENT_SECRET': 'test_github_client_secret'
         }
         cls.app = create_app(test_config)
+        cls.client = cls.app.test_client()
         cls.auth = Auth(cls.app)
+
+        # Mock OAuth
+        cls.mock_oauth_instance = mock_oauth.return_value
+        cls.mock_github = MagicMock()
+        cls.mock_oauth_instance.register.return_value = cls.mock_github
 
     def setUp(self):
         print(f"\nSetting up test: {self._testMethodName}")
@@ -39,6 +51,41 @@ class TestAuth(unittest.TestCase):
         with self.app.test_request_context(headers={'Authorization': f'Basic {auth_string}'}):
             result = self.auth.check_basic_auth()
             self.assertTrue(result)
+
+    def test_jwt_login(self):
+        response = self.client.post('/login', json={
+            'username': 'admin',
+            'password': 'admin'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('access_token', response.json)
+
+    def test_jwt_protected_route(self):
+        # First, get a token
+        response = self.client.post('/login', json={
+            'username': 'admin',
+            'password': 'admin'
+        })
+        token = response.json['access_token']
+
+        # Then, use the token to access a protected route
+        response = self.client.get('/users', headers={'Authorization': f'Bearer {token}'})
+        self.assertEqual(response.status_code, 200)
+
+    @patch('app.auth.Auth.github')
+    def test_github_login(self, mock_github):
+        mock_github.authorize_redirect.return_value = 'Redirecting...'
+        response = self.client.get('/login/github')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b'Redirecting...')
+
+    @patch('app.auth.Auth.github')
+    def test_github_callback(self, mock_github):
+        mock_github.authorize_access_token.return_value = 'mock_token'
+        mock_github.get.return_value.json.return_value = {'login': 'test_user'}
+        response = self.client.get('/login/github/callback')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('access_token', response.json)
 
 class TestCosmosDBClient(unittest.TestCase):
     @patch('app.cosmos_db_client.CosmosClient')
@@ -72,20 +119,10 @@ class TestCosmosDBClient(unittest.TestCase):
         
         items = self.cosmos_client.get_all_items()
         
-        print(f"Type of items: {type(items)}")
-        print(f"Content of items: {items}")
-        
         self.assertIsInstance(items, list)
         self.assertEqual(len(items), 2)
-        
-        if items and isinstance(items[0], dict):
-            self.assertEqual(items[0].get('name'), 'Test1')
-            self.assertEqual(items[1].get('name'), 'Test2')
-        else:
-            self.fail(f"Unexpected structure of items: {items}")
-
+        self.assertEqual(items[0]['name'], 'Test1')
+        self.assertEqual(items[1]['name'], 'Test2')
 
 if __name__ == '__main__':
-    print("Starting tests...")
-    unittest.main(verbosity=2)
-    print("Tests complete.")
+    unittest.main()

@@ -7,6 +7,7 @@ from .cosmos_db_client import CosmosDBClient
 from .auth import Auth
 from . import routes
 import os
+from authlib.integrations.flask_client import OAuth
 
 def create_app(test_config=None):
     load_dotenv()
@@ -18,6 +19,11 @@ def create_app(test_config=None):
     else:
         app.config.update(test_config)
 
+    # Set the secret key
+    app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(24) #how do we handle this? 
+                                                                    #just a placeholder
+                                                                    #random for now
+
     # Initialize Limiter
     limiter = Limiter(
         get_remote_address,
@@ -27,7 +33,8 @@ def create_app(test_config=None):
     )
 
     cosmos_client = CosmosDBClient(app)
-    auth = Auth(app)
+    oauth = OAuth(app)
+    auth = Auth(app,oauth)
 
     # Register routes
     app.register_blueprint(routes.init_routes(cosmos_client, auth, limiter))

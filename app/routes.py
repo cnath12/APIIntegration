@@ -28,44 +28,7 @@ def init_routes(cosmos_client, auth, limiter):
                 users = cosmos_client.get_all_items()
                 return jsonify(users), 200
             except Exception as e:
-                current_app.logger.error(f"Error in get_users: {str(e)}")
                 return jsonify({"error": "Internal server error"}), 500
-
-    # @bp.route('/users', methods=['GET'])
-    # @auth.require_auth('any')
-    # @limiter.limit("100/minute")
-    # def get_users():
-    #     try:
-    #         limit = request.args.get('limit', default=100, type=int)
-    #         offset = request.args.get('offset', type=int)
-    #         continuation_token = request.args.get('continuation_token')
-    #         users = cosmos_client.get_all_items() 
-            
-    #         response = {
-    #             'users': users[:limit],
-    #             'limit': limit,
-    #         }
-    #         if len(users)>limit:
-    #             if(continuation_token):
-    #                 response['next_page'] = url_for(
-    #                     'users.get_users',
-    #                     limit=limit,
-    #                     continuation_token=next_continuation_token,
-    #                     _external=True
-    #                 )
-    #         elif offset is not None:
-    #             next_offset = offset + limit
-    #             response['next_page'] = url_for(
-    #                 'users.get_users',
-    #                 limit=limit,
-    #                 offset=next_offset,
-    #                 _external=True
-    #             )
-    #         return jsonify(response), 200
-    #     except Exception as e:
-    #         current_app.logger.error(f"Error in get_users: {str(e)}")
-    #         return jsonify({"error": "Internal server error"}), 500
-
 
     @bp.route('/users', methods=['POST'])
     @auth.require_auth('any')
@@ -105,6 +68,13 @@ def init_routes(cosmos_client, auth, limiter):
     def delete_user(id):
         cosmos_client.delete_item(id)
         return '', 204
+
+    @bp.route('/login', methods=['POST'])
+    @rate_limit_decorator()
+    def login():
+        username = request.json.get('username', None)
+        password = request.json.get('password', None)
+        return auth.login_jwt(username, password)
 
     @bp.route('/login/github')
     @rate_limit_decorator()

@@ -13,5 +13,10 @@ class Config:
     RATE_LIMIT_PERIOD = int(os.environ.get('RATE_LIMIT_PERIOD', 60))
     BASIC_AUTH_USERNAME = os.environ.get('BASIC_AUTH_USERNAME')
     BASIC_AUTH_PASSWORD = os.environ.get('BASIC_AUTH_PASSWORD')
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+    GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
+    GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    
 
     
