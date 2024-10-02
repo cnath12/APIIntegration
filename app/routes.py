@@ -3,6 +3,8 @@ import uuid
 import time
 from functools import wraps
 import tenacity
+from azure.cosmos.exceptions import CosmosHttpResponseError
+from azure.core.exceptions import AzureError
 
 bp = Blueprint('users', __name__)
 
@@ -27,8 +29,19 @@ def init_routes(cosmos_client, auth, limiter):
             try:
                 users = cosmos_client.get_all_items()
                 return jsonify(users), 200
+            except CosmosHttpResponseError as e:
+                print(f"Cosmos DB HTTP Error: {str(e)}")
+                print(f"Status code: {e.status_code}")
+                print(f"Substatus: {e.sub_status}")
+                print(f"Error code: {e.error_code}")
+                return jsonify({"error": "Database error", "details": str(e)}), 500
+            except AzureError as e:
+                print(f"Azure Error: {str(e)}")
+                return jsonify({"error": "Azure service error", "details": str(e)}), 500
             except Exception as e:
-                return jsonify({"error": "Internal server error"}), 500
+                print(f"Unexpected error in get_users: {str(e)}")
+                print(f"Error type: {type(e).__name__}")
+                return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
     @bp.route('/users', methods=['POST'])
     @auth.require_auth('any')
@@ -85,5 +98,43 @@ def init_routes(cosmos_client, auth, limiter):
     @rate_limit_decorator()
     def github_callback():
         return auth.oauth_callback()
+
+    @bp.route('/test_encryption', methods=['POST', 'GET'])
+    def test_encryption():
+        if request.method == 'POST':
+            data = request.json
+            original_text = data.get('text', '')
+        else:  # GET request
+            original_text = "This is a test of the encryption system."
+        
+        # Encrypt the text
+        encrypted_text = cosmos_client.encryptor.encrypt(original_text)
+        
+        # Decrypt the text
+        decrypted_text = cosmos_client.encryptor.decrypt(encrypted_text)
+        
+        return jsonify({
+            'original': original_text,
+            'encrypted': encrypted_text,
+            'decrypted': decrypted_text
+        })
+    
+    @bp.route('/create_test_doc', methods=['POST'])
+    def create_test_doc():
+        data = request.json
+        test_doc = {
+            'id': str(uuid.uuid4()),
+            'name': data.get('name', 'Test Document'),
+            'secret_data': data.get('secret_data', 'This is secret!')
+        }
+        created_doc = cosmos_client.create_item(test_doc)
+        return jsonify(created_doc)
+    
+    @bp.route('/get_test_doc/<doc_id>', methods=['GET'])
+    def get_test_doc(doc_id):
+        doc = cosmos_client.get_item(doc_id)
+        if doc:
+            doc['secret_data'] = cosmos_client.encryptor.decrypt(doc['secret_data'])
+        return jsonify(doc)
 
     return bp

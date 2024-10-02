@@ -2,21 +2,14 @@ from flask import request, jsonify, current_app, url_for
 from functools import wraps
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from authlib.integrations.flask_client import OAuth
-import os
 
 class Auth:
     def __init__(self, app, oauth):
         self.app = app
         self.jwt = JWTManager(app)
-        self.oauth = OAuth(app)
+        self.oauth = oauth
 
-        # Configure JWT
-        app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'your-secret-key')  # Change this!
-
-        # Configure OAuth
-        app.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID')
-        app.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET')
-
+        # Configure OAuth for GitHub
         self.github = self.oauth.register(
             name='github',
             client_id=app.config['GITHUB_CLIENT_ID'],
@@ -60,7 +53,7 @@ class Auth:
     def check_basic_auth(self):
         auth = request.authorization
         if not auth:
-            print("No authorization header found")
+            current_app.logger.info("No authorization header found")
             return False
         result = auth.username == self.app.config['BASIC_AUTH_USERNAME'] and \
                  auth.password == self.app.config['BASIC_AUTH_PASSWORD']
@@ -91,7 +84,6 @@ class Auth:
             github_user = resp.json()
             
             # Use the GitHub username as the identity for the JWT
-            # This doesn't require storing any user data
             access_token = create_access_token(identity=github_user['login'])
             
             return jsonify(
@@ -100,15 +92,5 @@ class Auth:
                 access_token=access_token
             ), 200
         except Exception as e:
-            # Log the error for debugging
             current_app.logger.error(f"OAuth callback error: {str(e)}")
             return jsonify(error="Authentication failed"), 400
-
-
-        # token = self.github.authorize_access_token()
-        # resp = self.github.get('user', token=token)
-        # profile = resp.json()
-        # #implement creation or update of user. 
-        # access_token = create_access_token(identity=profile['login'])
-        # return jsonify(access_token=access_token), 200
-        
