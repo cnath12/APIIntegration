@@ -8,13 +8,23 @@ from . import routes
 import os
 from authlib.integrations.flask_client import OAuth
 from .config import get_config
-from .cosmos_db_client import CosmosDBClient
+from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_talisman import Talisman
+import logging
+from logging.handlers import RotatingFileHandler
 
 
 def create_app(test_config=None):
     load_dotenv()
     print("Environment variables loaded")
     app = Flask(__name__)
+
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
     
     if test_config is None:
         print("Loading configuration")
@@ -32,6 +42,19 @@ def create_app(test_config=None):
             print(f"Error loading secrets: {str(e)}")
     else:
         app.config.update(test_config)
+
+    if not app.debug:
+        if not os.path.exists('logs'):
+            os.mkdir('logs')
+        file_handler = RotatingFileHandler('logs/application.log', maxBytes=10240, backupCount=10)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+        ))
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+
+        app.logger.setLevel(logging.INFO)
+        app.logger.info('Application startup')
 
     # Initialize Limiter
     limiter = Limiter(
@@ -63,19 +86,34 @@ def create_app(test_config=None):
         client_kwargs={'scope': 'user:email'},
     )
 
+    # Content Security Policy
+    csp = {
+        'default-src': '\'self\'',
+        'style-src': '\'self\' https://fonts.googleapis.com',
+        'font-src': '\'self\' https://fonts.gstatic.com',
+        'script-src': '\'self\' https://cdnjs.cloudflare.com',
+        'img-src': '\'self\' data:',
+    }
+
+    # Initialize Talisman with CSP
+    Talisman(app, force_https=True, strict_transport_security=True, session_cookie_secure=True, content_security_policy=csp)
+
     # Register routes
     app.register_blueprint(routes.init_routes(cosmos_client, auth, limiter))
 
     @app.errorhandler(404)
     def not_found(error):
+        app.logger.info(f"404 error occurred: {request.url}")
         return jsonify({"error": "Not found"}), 404
 
     @app.errorhandler(401)
     def unauthorized(error):
+        app.logger.warning(f"Unauthorized access attempt: {request.remote_addr}")
         return jsonify({"error": "Unauthorized"}), 401
 
     @app.errorhandler(429)
     def ratelimit_handler(e):
+        app.logger.warning(f"Rate limit exceeded: {request.remote_addr}")
         return jsonify({"error": "Rate limit exceeded"}), 429
 
     @app.errorhandler(500)

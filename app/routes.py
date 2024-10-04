@@ -6,9 +6,10 @@ import tenacity
 from azure.cosmos.exceptions import CosmosHttpResponseError
 from azure.core.exceptions import AzureError
 
-bp = Blueprint('users', __name__)
+# bp = Blueprint('users', __name__)
 
 def init_routes(cosmos_client, auth, limiter):
+    bp = Blueprint('users', __name__)
     def rate_limit_decorator():
         return limiter.limit("100/minute")
 
@@ -21,7 +22,11 @@ def init_routes(cosmos_client, auth, limiter):
                 retry=tenacity.retry_if_exception_type(Exception)
             )(func)(*args, **kwargs)
         return wrapper
-        
+    
+    @bp.route('/')
+    def home():
+        return "Hello, World!"
+
     @bp.route('/users', methods=['GET'])
     @auth.require_auth('any')
     @limiter.limit("100/minute")
@@ -105,7 +110,7 @@ def init_routes(cosmos_client, auth, limiter):
             data = request.json
             original_text = data.get('text', '')
         else:  # GET request
-            original_text = "This is a test of the encryption system."
+            original_text = "This encryption system."
         
         # Encrypt the text
         encrypted_text = cosmos_client.encryptor.encrypt(original_text)
@@ -119,22 +124,5 @@ def init_routes(cosmos_client, auth, limiter):
             'decrypted': decrypted_text
         })
     
-    @bp.route('/create_test_doc', methods=['POST'])
-    def create_test_doc():
-        data = request.json
-        test_doc = {
-            'id': str(uuid.uuid4()),
-            'name': data.get('name', 'Test Document'),
-            'secret_data': data.get('secret_data', 'This is secret!')
-        }
-        created_doc = cosmos_client.create_item(test_doc)
-        return jsonify(created_doc)
-    
-    @bp.route('/get_test_doc/<doc_id>', methods=['GET'])
-    def get_test_doc(doc_id):
-        doc = cosmos_client.get_item(doc_id)
-        if doc:
-            doc['secret_data'] = cosmos_client.encryptor.decrypt(doc['secret_data'])
-        return jsonify(doc)
 
     return bp

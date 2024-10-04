@@ -4,11 +4,21 @@ from azure.identity import DefaultAzureCredential
 import base64
 
 class Encryptor:
+    # def __init__(self, key_vault_url, key_name):
+    #     credential = DefaultAzureCredential()
+    #     key_client = KeyClient(vault_url=key_vault_url, credential=credential)
+    #     key = key_client.get_key(key_name)
+    #     self.crypto_client = CryptographyClient(key, credential=credential)
     def __init__(self, key_vault_url, key_name):
-        credential = DefaultAzureCredential()
-        key_client = KeyClient(vault_url=key_vault_url, credential=credential)
-        key = key_client.get_key(key_name)
-        self.crypto_client = CryptographyClient(key, credential=credential)
+        self.key_vault_url = key_vault_url
+        self.key_name = key_name
+        self.credential = DefaultAzureCredential()
+        self.key_client = KeyClient(vault_url=key_vault_url, credential=self.credential)
+        self.crypto_client = self._get_crypto_client()
+
+    def _get_crypto_client(self):
+        key = self.key_client.get_key(self.key_name)
+        return CryptographyClient(key, credential=self.credential)
 
     def encrypt(self, plaintext):
         result = self.crypto_client.encrypt(EncryptionAlgorithm.rsa_oaep, plaintext.encode())

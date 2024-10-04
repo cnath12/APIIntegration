@@ -12,6 +12,11 @@ class Config:
     KEY_VAULT_URL = os.environ.get('KEY_VAULT_URL')
     KEY_NAME = os.environ.get('KEY_NAME')  
 
+    # Common security settings
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = 3600
+
     @classmethod
     def load_secrets(cls):
         if not cls.KEY_VAULT_URL:
@@ -30,12 +35,17 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    SESSION_COOKIE_SECURE = False
 
 class ProductionConfig(Config):
     DEBUG = False
+    SESSION_COOKIE_SECURE = True
+    # SESSION_COOKIE_HTTPONLY = True
+    # SESSION_COOKIE_SAMESITE = 'Lax'
 
 class TestingConfig(Config):
     TESTING = True
+    SESSION_COOKIE_SECURE = False
     @classmethod
     def load_secrets(cls):
         print(f"Attempting to load secrets from Key Vault URL: {cls.KEY_VAULT_URL}")
