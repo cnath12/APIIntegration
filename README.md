@@ -1,19 +1,27 @@
 # API Integration with Azure Cosmos DB
 
-This project implements a Flask-based REST API that integrates with Azure Cosmos DB. It includes authentication, rate limiting, and CRUD operations for user management.
+This project implements various security features for a Flask application, including HTTPS, HSTS, CSP, rate limiting, CRUD operations for user management, and more.
 
 ## Features
 
 - REST API with CRUD operations for users
-- Integration with Azure Cosmos DB
-- Authentication 
+- Secure integration with Azure Cosmos DB
+- Multi-factor authentication (API Key, Basic Auth, JWT, OAuth)
 - Rate limiting
+- Data-in-transit encryption
+- Data-at-rest encryption using Azure Key Vault
+- HTTPS enforcement with TLS 1.3
+- Content Security Policy (CSP)
+- Strict Transport Security (HSTS)
+- Secure cookie settings
 - Unit and integration tests
 
 ## Prerequisites
 
 - Python 3.7+
 - Azure Cosmos DB account
+- Azure Key Vault account
+- Nginx (for production deployment)
 
 ## Installation
 
@@ -54,8 +62,17 @@ This project implements a Flask-based REST API that integrates with Azure Cosmos
 
 To run the application:
 
+### Development
 ```
 python app.py
+```
+
+### Production
+
+1. Set up Nginx (refer to the provided Nginx configuration).
+2. Run with Gunicorn:
+```
+./start.sh
 ```
 
 The API will be available at `http://localhost:5000`.
@@ -67,7 +84,11 @@ To run the unit tests:
 ```
 python -m unittest tests/test_unit.py
 ```
+To run the encryption tests:
 
+```
+python -m unittest tests/test_encryption.py
+```
 To run the integration tests:
 
 ```
@@ -83,8 +104,31 @@ python -m unittest tests/test_integration.py
 - `DELETE /users/<id>`: Delete a user
 - `GET /login/github`: Initiate GitHub OAuth login
 - `GET /oauth/callback`: GitHub OAuth callback URL
+- `POST /test_encryption`: Test encryption/decryption
+- `GET /test-https`: Test HTTPS configuration
+
+## Security Features
+
+- HTTPS enforcement with TLS 1.3
+- Strong cipher suite configuration
+- HTTP to HTTPS redirection
+- Strict Transport Security (HSTS)
+- Content Security Policy (CSP)
+- X-Frame-Options, X-Content-Type-Options, and Referrer Policy headers
+- Secure cookie settings
+- Rate limiting
+- Data-at-rest encryption using Azure Key Vault
+- Multiple authentication methods (API Key, Basic Auth, JWT, OAuth)
 
 
 ## Rate Limiting
 
 The API is rate-limited to 100 requests per minute by default. This can be adjusted in the `.env` file.
+
+## Deployment
+
+The application is configured to run with Gunicorn in production. Use the `start.sh` script to launch the application in a production environment.
+
+## Logging
+
+Application logs are stored in the `logs` directory. Log rotation is implemented to manage log file sizes.
