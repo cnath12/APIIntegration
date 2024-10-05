@@ -1,30 +1,25 @@
 import multiprocessing
 
-# Gunicorn configuration file
-# https://docs.gunicorn.org/en/latest/configure.html
-
 # Server socket
 bind = "0.0.0.0:8000"  # Use port 8000 by default, adjust as needed
 
-# Worker processes
 workers = multiprocessing.cpu_count() * 2 + 1  # Dynamically set based on available CPUs
 
+#worker_class = "gevent"
+
 # Logging
-accesslog = "-"  # Log to stdout
-errorlog = "-"   # Log to stderr
+accesslog = "-" 
+errorlog = "-"  
 loglevel = "info"
 
 # Security
-limit_request_line = 4094  # Limit the allowed size of the HTTP request line
-limit_request_fields = 100  # Limit the number of HTTP headers
+limit_request_line = 4094 
+limit_request_fields = 100 
 
 # Timeouts
-timeout = 30  # Worker silent for more than this many seconds are killed and restarted
-keepalive = 2  # The number of seconds to wait for requests on a Keep-Alive connection
+timeout = 30 
+keepalive = 5
 
-# SSL (uncomment and modify if using HTTPS)
-# keyfile = '/path/to/key'
-# certfile = '/path/to/cert'
-
+forwarded_allow_ips = '127.0.0.1'
 # Worker process name
 proc_name = 'gunicorn_process'

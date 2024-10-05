@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, redirect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
@@ -12,6 +12,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_talisman import Talisman
 import logging
 from logging.handlers import RotatingFileHandler
+from .utils import https_url_for, ensure_https
 
 
 def create_app(test_config=None):
@@ -19,7 +20,8 @@ def create_app(test_config=None):
     print("Environment variables loaded")
     app = Flask(__name__)
 
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+    if not app.debug and not os.environ.get('FLASK_ENV') == 'development':
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     app.config['SESSION_COOKIE_SECURE'] = True
     app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -95,8 +97,12 @@ def create_app(test_config=None):
         'img-src': '\'self\' data:',
     }
 
-    # Initialize Talisman with CSP
-    Talisman(app, force_https=True, strict_transport_security=True, session_cookie_secure=True, content_security_policy=csp)
+        # Initialize Talisman with CSP
+    
+    Talisman(app, force_https=not app.debug, frame_options='DENY', x_xss_protection=False, 
+             strict_transport_security=True, session_cookie_secure=not app.debug, 
+             content_security_policy=csp, referrer_policy='strict-origin-when-cross-origin'
+            )
 
     # Register routes
     app.register_blueprint(routes.init_routes(cosmos_client, auth, limiter))
@@ -120,5 +126,15 @@ def create_app(test_config=None):
     def internal_error(error):
         app.logger.error(f"Internal error: {str(error)}")
         return jsonify({"error": "Internal server error"}), 500
+    
+    @app.route('/favicon.ico')
+    def favicon():
+        return '', 204
+    
+    @app.before_request
+    def force_https_redirects():
+        if request.url.startswith('http://') and not app.debug:
+            return redirect(ensure_https(request.url), code=301)
+
 
     return app

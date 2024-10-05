@@ -4,17 +4,18 @@ import tenacity
 from .encryption import Encryptor
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+import base64
 
 
 class CosmosDBClient:
     def __init__(self, app):
         cosmos_endpoint = app.config.get('COSMOS_ENDPOINT')
-        #cosmos_key = app.config.get('COSMOS_KEY')
         database_name = app.config.get('DATABASE_NAME')
         container_name = app.config.get('CONTAINER_NAME')
         key_vault_url = app.config.get('KEY_VAULT_URL')
+        key_name = app.config.get('KEY_NAME')
         
-        if not all([cosmos_endpoint, database_name, container_name, key_vault_url]):
+        if not all([cosmos_endpoint, database_name, container_name, key_vault_url, key_name]):
             raise ValueError("Missing Cosmos DB or Key Vault configuration")
         
         try:
@@ -25,7 +26,7 @@ class CosmosDBClient:
             self.client = CosmosClient(cosmos_endpoint, credential=cosmos_key)
             self.database = self.client.get_database_client(database_name)
             self.container = self.database.get_container_client(container_name)
-            self.encryptor = Encryptor(app.config['KEY_VAULT_URL'], app.config['KEY_NAME'])
+            self.encryptor = Encryptor(key_vault_url, key_name)
         except Exception as e:
             print(f"Error initializing CosmosDBClient: {str(e)}")
             raise

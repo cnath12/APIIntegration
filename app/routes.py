@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, url_for
+from flask import Blueprint, request, jsonify
 import uuid
 import time
 from functools import wraps
@@ -6,7 +6,6 @@ import tenacity
 from azure.cosmos.exceptions import CosmosHttpResponseError
 from azure.core.exceptions import AzureError
 
-# bp = Blueprint('users', __name__)
 
 def init_routes(cosmos_client, auth, limiter):
     bp = Blueprint('users', __name__)
@@ -24,8 +23,9 @@ def init_routes(cosmos_client, auth, limiter):
         return wrapper
     
     @bp.route('/')
+    @limiter.limit("100/minute")
     def home():
-        return "Hello, World!"
+        return "Welcome to the API"
 
     @bp.route('/users', methods=['GET'])
     @auth.require_auth('any')
@@ -103,6 +103,29 @@ def init_routes(cosmos_client, auth, limiter):
     @rate_limit_decorator()
     def github_callback():
         return auth.oauth_callback()
+    
+    # @bp.route('/test_encryption', methods=['POST'])
+    # def test_encryption():
+    #     try:
+    #         data = request.json
+    #         if not data or 'password' not in data:
+    #             return jsonify({'error': 'No password provided in request'}), 400
+
+    #         original_text = data['password']
+            
+    #         # Encrypt the text
+    #         encrypted_text = cosmos_client.encryptor.encrypt(original_text)
+            
+    #         # Decrypt the text
+    #         decrypted_text = cosmos_client.encryptor.decrypt(encrypted_text)
+            
+    #         return jsonify({
+    #             'original': original_text,
+    #             'encrypted': encrypted_text,
+    #             'decrypted': decrypted_text
+    #         })
+    #     except Exception as e:
+    #         return jsonify({'error': str(e)}), 500
 
     @bp.route('/test_encryption', methods=['POST', 'GET'])
     def test_encryption():
@@ -110,7 +133,7 @@ def init_routes(cosmos_client, auth, limiter):
             data = request.json
             original_text = data.get('text', '')
         else:  # GET request
-            original_text = "This encryption system."
+            original_text = "secret"
         
         # Encrypt the text
         encrypted_text = cosmos_client.encryptor.encrypt(original_text)
@@ -123,6 +146,14 @@ def init_routes(cosmos_client, auth, limiter):
             'encrypted': encrypted_text,
             'decrypted': decrypted_text
         })
+    
+
+    @bp.route('/test-https')
+    def test_https():
+        if request.is_secure:
+            return jsonify({"status": "secure", "protocol": "HTTPS"}), 200
+        else:
+            return jsonify({"status": "not secure", "protocol": "HTTP"}), 200
     
 
     return bp
