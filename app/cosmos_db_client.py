@@ -19,7 +19,7 @@ class CosmosDBClient:
             raise ValueError("Missing Cosmos DB or Key Vault configuration")
         
         try:
-            credential = DefaultAzureCredential()
+            credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
             secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
             cosmos_key = secret_client.get_secret('COSMOS-KEY').value
             
@@ -37,12 +37,6 @@ class CosmosDBClient:
         retry=tenacity.retry_if_exception_type(Exception)
     )
     def get_all_items(self):
-        # query = "SELECT * FROM c"
-        # items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
-        # for item in items:
-        #     if 'name' in item:
-        #         item['name'] = self.encryptor.decrypt(item['name'])
-        # return items
         try:
             query = "SELECT * FROM c"
             items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
@@ -113,7 +107,6 @@ class CosmosDBClient:
         if 'name' in item:
             item['name'] = self.encryptor.encrypt(item['name'])
         return self.container.upsert_item(body=item)
-        # return self.container.upsert_item(body=item)
 
     @tenacity.retry(
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),

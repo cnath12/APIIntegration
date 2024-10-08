@@ -103,29 +103,6 @@ def init_routes(cosmos_client, auth, limiter):
     @rate_limit_decorator()
     def github_callback():
         return auth.oauth_callback()
-    
-    # @bp.route('/test_encryption', methods=['POST'])
-    # def test_encryption():
-    #     try:
-    #         data = request.json
-    #         if not data or 'password' not in data:
-    #             return jsonify({'error': 'No password provided in request'}), 400
-
-    #         original_text = data['password']
-            
-    #         # Encrypt the text
-    #         encrypted_text = cosmos_client.encryptor.encrypt(original_text)
-            
-    #         # Decrypt the text
-    #         decrypted_text = cosmos_client.encryptor.decrypt(encrypted_text)
-            
-    #         return jsonify({
-    #             'original': original_text,
-    #             'encrypted': encrypted_text,
-    #             'decrypted': decrypted_text
-    #         })
-    #     except Exception as e:
-    #         return jsonify({'error': str(e)}), 500
 
     @bp.route('/test_encryption', methods=['POST', 'GET'])
     def test_encryption():

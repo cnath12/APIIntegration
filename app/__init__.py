@@ -20,7 +20,7 @@ def create_app(test_config=None):
     print("Environment variables loaded")
     app = Flask(__name__)
 
-    if not app.debug and not os.environ.get('FLASK_ENV') == 'development':
+    if not app.debug and os.environ.get('FLASK_ENV') != 'development':
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     app.config['SESSION_COOKIE_SECURE'] = True

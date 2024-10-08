@@ -22,7 +22,7 @@ class Config:
         if not cls.KEY_VAULT_URL:
             raise ValueError("KEY_VAULT_URL environment variable is not set")
 
-        credential = DefaultAzureCredential()
+        credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
         secret_client = SecretClient(vault_url=cls.KEY_VAULT_URL, credential=credential)
 
         cls.COSMOS_KEY = secret_client.get_secret('COSMOS-KEY').value
@@ -53,7 +53,7 @@ class TestingConfig(Config):
             raise ValueError("KEY_VAULT_URL environment variable is not set")
 
         try:
-            credential = DefaultAzureCredential()
+            credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
             secret_client = SecretClient(vault_url=cls.KEY_VAULT_URL, credential=credential)
 
             secrets_to_load = {

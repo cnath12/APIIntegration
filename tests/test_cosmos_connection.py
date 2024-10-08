@@ -8,7 +8,7 @@ load_dotenv()
 
 def get_secret_from_key_vault(secret_name):
     key_vault_url = os.getenv('KEY_VAULT_URL')
-    credential = DefaultAzureCredential()
+    credential = DefaultAzureCredential(additionally_allowed_tenants=["*"])
     secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
     try:
         return secret_client.get_secret(secret_name).value
