@@ -9,6 +9,9 @@ import base64
 
 class CosmosDBClient:
     def __init__(self, app):
+        print("CosmosDBClient initialization started")
+        print(f"KEY_VAULT_URL: {app.config.get('KEY_VAULT_URL')}")
+        print(f"KEY_NAME: {app.config.get('KEY_NAME')}")
         cosmos_endpoint = app.config.get('COSMOS_ENDPOINT')
         database_name = app.config.get('DATABASE_NAME')
         container_name = app.config.get('CONTAINER_NAME')
@@ -26,7 +29,9 @@ class CosmosDBClient:
             self.client = CosmosClient(cosmos_endpoint, credential=cosmos_key)
             self.database = self.client.get_database_client(database_name)
             self.container = self.database.get_container_client(container_name)
+            print("About to initialize Encryptor")
             self.encryptor = Encryptor(key_vault_url, key_name)
+            print("Encryptor initialized")
         except Exception as e:
             print(f"Error initializing CosmosDBClient: {str(e)}")
             raise

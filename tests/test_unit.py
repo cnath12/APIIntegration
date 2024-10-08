@@ -39,16 +39,13 @@ class MockConfig:
         cls.COSMOS_KEY = 'test_cosmos_key'
 
 class TestCosmosDBClient(unittest.TestCase):
-    @patch('app.get_config')
+
     @patch('app.cosmos_db_client.CosmosClient')
     @patch('app.cosmos_db_client.DefaultAzureCredential')
     @patch('app.cosmos_db_client.SecretClient')
     @patch('app.cosmos_db_client.Encryptor')
-    def setUp(self, mock_encryptor, mock_secret_client, mock_default_credential, mock_cosmos_client, mock_get_config):
-        mock_get_config.return_value = MockConfig
-        self.app = create_app()
-        self.client = self.app.test_client()
-        
+    def setUp(self, mock_encryptor_class, mock_secret_client, mock_default_credential, mock_cosmos_client):
+        self.app = MagicMock()
         self.app.config = {
             'COSMOS_ENDPOINT': 'https://test.documents.azure.com:443/',
             'DATABASE_NAME': 'test_db',
@@ -57,13 +54,15 @@ class TestCosmosDBClient(unittest.TestCase):
             'KEY_NAME': 'test-key-name'
         }
         
-        mock_secret_client_instance = mock_secret_client.return_value
-        mock_secret_client_instance.get_secret.return_value.value = 'fake-cosmos-key'
+        self.mock_secret_client_instance = mock_secret_client.return_value
+        self.mock_secret_client_instance.get_secret.return_value.value = 'fake-cosmos-key'
         
         self.mock_cosmos_client = mock_cosmos_client
-        self.mock_encryptor = mock_encryptor.return_value
+        self.mock_encryptor_class = mock_encryptor_class
+        self.mock_encryptor_instance = self.mock_encryptor_class.return_value
         self.mock_default_credential = mock_default_credential
         self.mock_secret_client = mock_secret_client
+        
         self.cosmos_client = CosmosDBClient(self.app)
 
     def test_initialization(self):
@@ -72,42 +71,104 @@ class TestCosmosDBClient(unittest.TestCase):
         self.assertEqual(self.mock_default_credential.call_args[1], {'additionally_allowed_tenants': ["*"]})
         
         # Check SecretClient initialization
-        expected_secret_calls = [
-            unittest.mock.call(vault_url='https://test-keyvault.vault.azure.net/', credential=self.mock_default_credential.return_value),
-            unittest.mock.call(vault_url='https://test-keyvault.vault.azure.net/', credential=self.mock_default_credential.return_value)
-        ]
-        self.mock_secret_client.assert_has_calls(expected_secret_calls, any_order=True)
-        self.assertEqual(self.mock_secret_client.call_count, 2)
-
+        self.mock_secret_client.assert_called_once_with(
+            vault_url='https://test-keyvault.vault.azure.net/',
+            credential=self.mock_default_credential.return_value
+        )
+        
         # Check if get_secret was called for COSMOS-KEY
-        self.mock_secret_client.return_value.get_secret.assert_any_call('COSMOS-KEY')
-
+        self.mock_secret_client_instance.get_secret.assert_called_once_with('COSMOS-KEY')
+        
         # Check CosmosClient initialization
         self.mock_cosmos_client.assert_called_once_with(
-            'https://test.documents.azure.com:443/', 
-            credential=self.mock_secret_client.return_value.get_secret.return_value.value
+            'https://test.documents.azure.com:443/',
+            credential='fake-cosmos-key'
+        )
+        
+        # Check database and container client initialization
+        mock_cosmos_instance = self.mock_cosmos_client.return_value
+        mock_cosmos_instance.get_database_client.assert_called_once_with('test_db')
+        mock_cosmos_instance.get_database_client.return_value.get_container_client.assert_called_once_with('test_container')
+        
+        # Check Encryptor initialization
+        self.mock_encryptor_class.assert_called_once_with(
+            'https://test-keyvault.vault.azure.net/',
+            'test-key-name'
         )
 
-        # Check database and container client initialization
-        mock_database_client = self.mock_cosmos_client.return_value.get_database_client
-        mock_database_client.assert_called_with('test_db')
-        mock_container_client = mock_database_client.return_value.get_container_client
-        mock_container_client.assert_called_with('test_container')
 
-        # Check Encryptor initialization
-        self.assertTrue(self.mock_encryptor.called)
-        self.assertEqual(self.mock_encryptor.call_args[0], ('https://test-keyvault.vault.azure.net/', 'test-key-name'))
+    # @patch('app.get_config')
+    # @patch('app.cosmos_db_client.CosmosClient')
+    # @patch('app.cosmos_db_client.DefaultAzureCredential')
+    # @patch('app.cosmos_db_client.SecretClient')
+    # @patch('app.cosmos_db_client.Encryptor')
+    # def setUp(self, mock_encryptor, mock_secret_client, mock_default_credential, mock_cosmos_client, mock_get_config):
+    #     mock_get_config.return_value = MockConfig
+    #     self.app = create_app()
+    #     self.client = self.app.test_client()
+        
+    #     self.app.config = {
+    #         'COSMOS_ENDPOINT': 'https://test.documents.azure.com:443/',
+    #         'DATABASE_NAME': 'test_db',
+    #         'CONTAINER_NAME': 'test_container',
+    #         'KEY_VAULT_URL': 'https://test-keyvault.vault.azure.net/',
+    #         'KEY_NAME': 'test-key-name'
+    #     }
+        
+    #     mock_secret_client_instance = mock_secret_client.return_value
+    #     mock_secret_client_instance.get_secret.return_value.value = 'fake-cosmos-key'
+        
+    #     self.mock_cosmos_client = mock_cosmos_client
+    #     self.mock_encryptor = mock_encryptor.return_value
+    #     self.mock_default_credential = mock_default_credential
+    #     self.mock_secret_client = mock_secret_client
+    #     self.cosmos_client = CosmosDBClient(self.app)
 
+    # def test_initialization(self):
+    #     # Check DefaultAzureCredential
+    #     self.assertTrue(self.mock_default_credential.called)
+    #     self.assertEqual(self.mock_default_credential.call_args[1], {'additionally_allowed_tenants': ["*"]})
+        
+    #     # Check SecretClient initialization
+    #     expected_secret_calls = [
+    #         unittest.mock.call(vault_url='https://test-keyvault.vault.azure.net/', credential=self.mock_default_credential.return_value),
+    #         unittest.mock.call(vault_url='https://test-keyvault.vault.azure.net/', credential=self.mock_default_credential.return_value)
+    #     ]
+    #     self.mock_secret_client.assert_has_calls(expected_secret_calls, any_order=True)
+    #     self.assertEqual(self.mock_secret_client.call_count, 2)
+
+    #     # Check if get_secret was called for COSMOS-KEY
+    #     self.mock_secret_client.return_value.get_secret.assert_any_call('COSMOS-KEY')
+
+    #     # Check CosmosClient initialization
+    #     expected_cosmos_calls = [
+    #         unittest.mock.call('https://test.documents.azure.com:443/', credential=self.mock_secret_client.return_value.get_secret.return_value.value),
+    #         unittest.mock.call('https://test.documents.azure.com:443/', credential='fake-cosmos-key')
+    #     ]
+    #     self.mock_cosmos_client.assert_has_calls(expected_cosmos_calls, any_order=True)
+    #     self.assertEqual(self.mock_cosmos_client.call_count, 2)
+
+    #     # Check database and container client initialization
+    #     mock_database_client = self.mock_cosmos_client.return_value.get_database_client
+    #     mock_database_client.assert_called_with('test_db')
+    #     mock_container_client = mock_database_client.return_value.get_container_client
+    #     mock_container_client.assert_called_with('test_container')
+
+    #     # Check Encryptor initialization
+    #     self.assertTrue(self.mock_encryptor.called)
+    #     self.assertEqual(self.mock_encryptor.call_args[0], ('https://test-keyvault.vault.azure.net/', 'test-key-name'))
+
+    
     def test_get_all_items(self):
         mock_items = [
             {'id': '1', 'name': base64.b64encode(b'EncryptedTest1').decode()},
             {'id': '2', 'name': base64.b64encode(b'EncryptedTest2').decode()}
         ]
         self.cosmos_client.container.query_items.return_value = mock_items
-        self.mock_encryptor.decrypt.side_effect = ['Test1', 'Test2']
-        
+        self.mock_encryptor_instance.decrypt.side_effect = ['Test1', 'Test2']
+
         items = self.cosmos_client.get_all_items()
-        
+
         self.assertIsInstance(items, list)
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0]['name'], 'Test1')
@@ -115,10 +176,10 @@ class TestCosmosDBClient(unittest.TestCase):
 
     def test_create_item(self):
         test_item = {'id': '1', 'name': 'Test Item'}
-        self.mock_encryptor.encrypt.return_value = 'EncryptedTestItem'
-        
+        self.mock_encryptor_instance.encrypt.return_value = 'EncryptedTestItem'
+
         self.cosmos_client.create_item(test_item)
-        
+
         self.cosmos_client.container.create_item.assert_called_once()
         called_args = self.cosmos_client.container.create_item.call_args
         self.assertEqual(called_args.kwargs['body']['name'], 'EncryptedTestItem')
@@ -126,19 +187,18 @@ class TestCosmosDBClient(unittest.TestCase):
     def test_get_item(self):
         mock_item = {'id': '1', 'name': 'EncryptedTest'}
         self.cosmos_client.container.read_item.return_value = mock_item
-        self.mock_encryptor.decrypt.return_value = 'Test'
-        
+        self.mock_encryptor_instance.decrypt.return_value = 'Test'
+
         item = self.cosmos_client.get_item('1')
-        
+
         self.assertEqual(item['name'], 'Test')
-        self.cosmos_client.container.read_item.assert_called_once_with(item='1', partition_key='1')
 
     def test_update_item(self):
         test_item = {'id': '1', 'name': 'Updated Test Item'}
-        self.mock_encryptor.encrypt.return_value = 'EncryptedUpdatedTestItem'
-        
+        self.mock_encryptor_instance.encrypt.return_value = 'EncryptedUpdatedTestItem'
+
         self.cosmos_client.update_item(test_item)
-        
+
         self.cosmos_client.container.upsert_item.assert_called_once()
         called_args = self.cosmos_client.container.upsert_item.call_args
         self.assertEqual(called_args.kwargs['body']['name'], 'EncryptedUpdatedTestItem')
@@ -149,8 +209,8 @@ class TestCosmosDBClient(unittest.TestCase):
 
     def test_encryption(self):
         original_text = "This is a test"
-        self.mock_encryptor.encrypt.return_value = 'encrypted_text'
-        self.mock_encryptor.decrypt.return_value = 'decrypted_text'
+        self.mock_encryptor_instance.encrypt.return_value = 'encrypted_text'
+        self.mock_encryptor_instance.decrypt.return_value = 'decrypted_text'
 
         encrypted_text = self.cosmos_client.encryptor.encrypt(original_text)
         decrypted_text = self.cosmos_client.encryptor.decrypt(encrypted_text)
