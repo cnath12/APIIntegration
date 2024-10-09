@@ -103,6 +103,17 @@ def init_routes(cosmos_client, auth, limiter):
     @rate_limit_decorator()
     def github_callback():
         return auth.oauth_callback()
+    
+
+    @bp.route('/rotate-key', methods=['POST'])
+    @auth.require_auth('any')
+    @rate_limit_decorator()
+    def rotate_encryption_key():
+        try:
+            new_version = cosmos_client.rotate_encryption_key()
+            return jsonify({"message": f"Key rotated successfully. New version: {new_version}"}), 200
+        except Exception as e:
+            return jsonify({"error": f"Key rotation failed: {str(e)}"}), 500
 
     @bp.route('/test_encryption', methods=['POST', 'GET'])
     def test_encryption():

@@ -1,4 +1,5 @@
 import unittest
+from unittest import TestCase
 from unittest.mock import patch, MagicMock
 import base64
 import json
@@ -7,6 +8,7 @@ import os
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.cosmos import CosmosClient
+from azure.keyvault.keys import KeyVaultKey
 from flask import redirect, url_for
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -185,13 +187,25 @@ class TestCosmosDBClient(unittest.TestCase):
         self.assertEqual(called_args.kwargs['body']['name'], 'EncryptedTestItem')
 
     def test_get_item(self):
-        mock_item = {'id': '1', 'name': 'EncryptedTest'}
+        # Simulate an encrypted item in the database
+        encrypted_name = 'EncryptedTest'
+        mock_item = {'id': '1', 'name': encrypted_name}
         self.cosmos_client.container.read_item.return_value = mock_item
+
+        # Set up the mock encryptor to "decrypt" the name
         self.mock_encryptor_instance.decrypt.return_value = 'Test'
 
+        # Call the method under test
         item = self.cosmos_client.get_item('1')
 
+        # Verify that the decrypted item is returned
         self.assertEqual(item['name'], 'Test')
+
+        # Verify that the decrypt method was called with the encrypted name
+        self.mock_encryptor_instance.decrypt.assert_called_once_with(encrypted_name)
+
+        # Verify that the read_item method of the container was called with the correct ID
+        self.cosmos_client.container.read_item.assert_called_once_with(item='1', partition_key='1')
 
     def test_update_item(self):
         test_item = {'id': '1', 'name': 'Updated Test Item'}
@@ -219,8 +233,9 @@ class TestCosmosDBClient(unittest.TestCase):
         self.assertEqual(decrypted_text, 'decrypted_text')
 
 class TestAuth(unittest.TestCase):
+    @patch('app.CosmosDBClient')
     @patch('app.auth.OAuth')
-    def setUp(self, mock_oauth):
+    def setUp(self, mock_oauth, mock_cosmos_client):
         self.app = create_app()
         self.client = self.app.test_client()
         self.app_context = self.app.app_context()
@@ -230,7 +245,7 @@ class TestAuth(unittest.TestCase):
         self.mock_oauth.register.return_value = self.mock_github
         self.auth = Auth(self.app, self.mock_oauth)
         self.app.config['API_KEY'] = 'test_api_key'
-        self.app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # replace with your actual secret key
+        self.app.config['JWT_SECRET_KEY'] = 'your-secret-key'  
         self.jwt = JWTManager(self.app)
 
     def tearDown(self):
@@ -332,19 +347,38 @@ class TestAuth(unittest.TestCase):
 class TestEncryptor(unittest.TestCase):
     @patch('app.encryption.KeyClient')
     @patch('app.encryption.CryptographyClient')
-    def setUp(self, mock_crypto_client, mock_key_client):
-        self.mock_key_client = mock_key_client
-        self.mock_crypto_client = mock_crypto_client
+    @patch('app.encryption.DefaultAzureCredential')
+    def setUp(self, mock_default_credential, mock_crypto_client_class, mock_key_client):
+        self.mock_key_client = mock_key_client.return_value
+        self.mock_crypto_client_class = mock_crypto_client_class
+        self.mock_default_credential = mock_default_credential.return_value
+
+        # Create a mock KeyVaultKey with the correct structure
+        self.mock_key = MagicMock(spec=KeyVaultKey)
+        self.mock_key.name = 'fake-key-name'
+        self.mock_key.properties = MagicMock()
+        self.mock_key.properties.version = '1'
+
+        # Make list_properties_of_keys return a list with our mock key
+        self.mock_key_client.list_properties_of_keys.return_value = [self.mock_key]
+
+        # Make get_key return our mock key
+        self.mock_key_client.get_key.return_value = self.mock_key
+
+        # Set up the CryptographyClient mock
+        self.mock_crypto_client = MagicMock()
+        self.mock_crypto_client_class.return_value = self.mock_crypto_client
+
         self.encryptor = Encryptor('https://fake-vault.vault.azure.net', 'fake-key-name')
 
     def test_encrypt(self):
-        self.mock_crypto_client.return_value.encrypt.return_value.ciphertext = b'encrypted_data'
+        self.mock_crypto_client.encrypt.return_value.ciphertext = b'encrypted_data'
         result = self.encryptor.encrypt('test_data')
-        self.assertEqual(result, 'ZW5jcnlwdGVkX2RhdGE=')  # base64 encoded 'encrypted_data'
+        self.assertEqual(result, 'ZW5jcnlwdGVkX2RhdGE=|1')  # base64 encoded 'encrypted_data' with version
 
     def test_decrypt(self):
-        self.mock_crypto_client.return_value.decrypt.return_value.plaintext = b'decrypted_data'
-        result = self.encryptor.decrypt('ZW5jcnlwdGVkX2RhdGE=')  # base64 encoded 'encrypted_data'
+        self.mock_crypto_client.decrypt.return_value.plaintext = b'decrypted_data'
+        result = self.encryptor.decrypt('ZW5jcnlwdGVkX2RhdGE=|1')  # base64 encoded 'encrypted_data' with version
         self.assertEqual(result, 'decrypted_data')
 
 

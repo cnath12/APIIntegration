@@ -37,7 +37,7 @@ class CosmosDBClient:
     def _decrypt_item(self, item):
         if 'name' in item:
             encrypted_name = item['name']
-            print(f"Encrypted name: {encrypted_name}")
+            print(f"Attempting to decrypt: {encrypted_name}")
             try:
                 # Ensure the encrypted name is properly padded
                 padding = 4 - (len(encrypted_name) % 4)
@@ -45,10 +45,12 @@ class CosmosDBClient:
                     encrypted_name += '=' * padding
                 
                 decoded_name = base64.b64decode(encrypted_name)
-                item['name'] = self.encryptor.decrypt(decoded_name)
+                decrypted_name = self.encryptor.decrypt(decoded_name)
+                item['name'] = decrypted_name
+                print(f"Successfully decrypted: {decrypted_name}")
             except Exception as decrypt_error:
                 print(f"Error decrypting name for item {item.get('id', 'unknown')}: {str(decrypt_error)}")
-                item['name'] = f"[Decryption Error: {str(decrypt_error)}]"
+                # item['name'] = f"[Decryption Error: {str(decrypt_error)}]"
         return item
 
     @tenacity.retry(
@@ -134,9 +136,8 @@ class CosmosDBClient:
         try:
             item = self.container.read_item(item=id, partition_key=id)
             if 'name' in item:
-                return self._decrypt_item(item)
-                # item['name'] = self.encryptor.decrypt(item['name'])
-            # return item
+                item['name'] = self.encryptor.decrypt(item['name'])
+            return item
         except exceptions.CosmosResourceNotFoundError:
             return None
 
@@ -157,3 +158,18 @@ class CosmosDBClient:
     )
     def delete_item(self, id):
         self.container.delete_item(item=id, partition_key=id)
+
+
+    def re_encrypt_all_items(self):
+        query = "SELECT * FROM c"
+        items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
+        for item in items:
+            if 'name' in item:
+                decrypted_name = self.encryptor.decrypt(item['name'])
+                item['name'] = self.encryptor.encrypt(decrypted_name)
+                self.container.upsert_item(body=item)
+
+    def rotate_encryption_key(self):
+        new_version = self.encryptor.rotate_key()
+        self.re_encrypt_all_items()
+        return new_version

@@ -1,6 +1,6 @@
 # API Integration with Azure Cosmos DB
 
-This project implements various security features for a Flask application, including HTTPS, HSTS, CSP, rate limiting, CRUD operations for user management, and more.
+This project implements various security features for a Flask application, including HTTPS, HSTS, CSP, rate limiting, CRUD operations for user management, and more. It also includes comprehensive testing for encryption, key rotation, and integration with Azure Cosmos DB.
 
 ## Features
 
@@ -10,6 +10,7 @@ This project implements various security features for a Flask application, inclu
 - Rate limiting
 - Data-in-transit encryption
 - Data-at-rest encryption using Azure Key Vault
+- Key rotation mechanism for enhanced security
 - HTTPS enforcement with TLS 1.3
 - Content Security Policy (CSP)
 - Strict Transport Security (HSTS)
@@ -118,6 +119,7 @@ python -m unittest tests/test_integration.py
 - Secure cookie settings
 - Rate limiting
 - Data-at-rest encryption using Azure Key Vault
+- Key rotation mechanism for enhanced security
 - Multiple authentication methods (API Key, Basic Auth, JWT, OAuth)
 
 
@@ -132,3 +134,7 @@ The application is configured to run with Gunicorn in production. Use the `start
 ## Logging
 
 Application logs are stored in the `logs` directory. Log rotation is implemented to manage log file sizes.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request
