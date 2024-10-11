@@ -1,9 +1,12 @@
+# import sys
+# import os
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import unittest
 from unittest.mock import MagicMock, patch
-from app.cosmos_db_client import CosmosDBClient
+from app.data.cosmos_db_client import CosmosDBClient
 
 class TestKeyRotation(unittest.TestCase):
     def setUp(self):

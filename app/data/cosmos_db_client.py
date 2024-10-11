@@ -1,7 +1,7 @@
 from azure.cosmos import CosmosClient, exceptions
 import uuid
 import tenacity
-from .encryption import Encryptor
+from ..security.encryption import Encryptor
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import base64
@@ -50,7 +50,6 @@ class CosmosDBClient:
                 print(f"Successfully decrypted: {decrypted_name}")
             except Exception as decrypt_error:
                 print(f"Error decrypting name for item {item.get('id', 'unknown')}: {str(decrypt_error)}")
-                # item['name'] = f"[Decryption Error: {str(decrypt_error)}]"
         return item
 
     @tenacity.retry(
@@ -73,47 +72,6 @@ class CosmosDBClient:
             print(f"Unexpected error in get_all_items: {str(e)}")
             print(f"Error type: {type(e).__name__}")
             raise
-
-    # @tenacity.retry(
-    #     wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
-    #     stop=tenacity.stop_after_attempt(5),
-    #     retry=tenacity.retry_if_exception_type(Exception)
-    # )
-    # def get_all_items(self):
-    #     try:
-    #         query = "SELECT * FROM c"
-    #         items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
-    #         decrypted_items = []
-    #         for item in items:
-    #             try:
-    #                 if 'name' in item:
-    #                     encrypted_name = item['name']
-    #                     print(f"Encrypted name: {encrypted_name}")
-    #                     try:
-    #                         # Try to add padding if it's missing
-    #                         padding_needed = len(encrypted_name) % 4
-    #                         if padding_needed:
-    #                             encrypted_name += '=' * (4 - padding_needed)
-                            
-    #                         decoded_name = base64.b64decode(encrypted_name)
-    #                         item['name'] = self.encryptor.decrypt(decoded_name)
-    #                     except Exception as decrypt_error:
-    #                         print(f"Error decrypting name for item {item.get('id', 'unknown')}: {str(decrypt_error)}")
-    #                         item['name'] = f"[Decryption Error: {str(decrypt_error)}]"
-    #             except Exception as item_error:
-    #                 print(f"Error processing item: {str(item_error)}")
-    #             decrypted_items.append(item)
-    #         return decrypted_items
-    #     except exceptions.CosmosHttpResponseError as e:
-    #         print(f"Cosmos DB HTTP Error in get_all_items: {str(e)}")
-    #         print(f"Status code: {e.status_code}")
-    #         print(f"Substatus: {e.sub_status}")
-    #         print(f"Error code: {e.error_code}")
-    #         raise
-    #     except Exception as e:
-    #         print(f"Unexpected error in get_all_items: {str(e)}")
-    #         print(f"Error type: {type(e).__name__}")
-    #         raise
 
     @tenacity.retry(
         wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),

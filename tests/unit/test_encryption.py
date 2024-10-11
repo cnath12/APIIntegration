@@ -1,9 +1,13 @@
+# import sys
+# import os
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 import unittest
 from unittest.mock import MagicMock
-from app.encryption import Encryptor
+from app.security.encryption import Encryptor
 import random
 import string
 

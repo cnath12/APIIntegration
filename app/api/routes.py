@@ -1,14 +1,14 @@
 from flask import Blueprint, request, jsonify
 import uuid
-import time
 from functools import wraps
 import tenacity
+from . import api_bp
 from azure.cosmos.exceptions import CosmosHttpResponseError
 from azure.core.exceptions import AzureError
 
 
-def init_routes(cosmos_client, auth, limiter):
-    bp = Blueprint('users', __name__)
+def init_routes(bp, cosmos_client, auth, limiter):
+    print("API routes file is being imported")
     def rate_limit_decorator():
         return limiter.limit("100/minute")
 
@@ -86,25 +86,7 @@ def init_routes(cosmos_client, auth, limiter):
     def delete_user(id):
         cosmos_client.delete_item(id)
         return '', 204
-
-    @bp.route('/login', methods=['POST'])
-    @rate_limit_decorator()
-    def login():
-        username = request.json.get('username', None)
-        password = request.json.get('password', None)
-        return auth.login_jwt(username, password)
-
-    @bp.route('/login/github')
-    @rate_limit_decorator()
-    def github_login():
-        return auth.oauth_login()
-
-    @bp.route('/login/github/callback')
-    @rate_limit_decorator()
-    def github_callback():
-        return auth.oauth_callback()
     
-
     @bp.route('/rotate-key', methods=['POST'])
     @auth.require_auth('any')
     @rate_limit_decorator()
@@ -119,7 +101,7 @@ def init_routes(cosmos_client, auth, limiter):
     def test_encryption():
         if request.method == 'POST':
             data = request.json
-            original_text = data.get('text', '')
+            original_text = data.get('password', '')
         else:  # GET request
             original_text = "secret"
         
@@ -142,6 +124,10 @@ def init_routes(cosmos_client, auth, limiter):
             return jsonify({"status": "secure", "protocol": "HTTPS"}), 200
         else:
             return jsonify({"status": "not secure", "protocol": "HTTP"}), 200
+        
+    @bp.route('/test')
+    def test_route():
+        return "Test route is working!"
     
 
-    return bp
+    return api_bp

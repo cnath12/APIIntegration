@@ -15,8 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
 from app.auth import Auth
-from app.cosmos_db_client import CosmosDBClient
-from app.encryption import Encryptor
+from app.data.cosmos_db_client import CosmosDBClient
+from app.security.encryption import Encryptor
 from flask_jwt_extended import create_access_token, JWTManager
 
 class MockConfig:
