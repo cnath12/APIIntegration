@@ -1,19 +1,30 @@
+import os
+import sys
+
+# Add the project root directory to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
+
 from flask import Flask, jsonify, request, redirect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
-from .cosmos_db_client import CosmosDBClient
-from .auth import Auth
-from . import routes
-import os
-from authlib.integrations.flask_client import OAuth
-from .config import get_config
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_talisman import Talisman
-import logging
-from logging.handlers import RotatingFileHandler
-from .utils import https_url_for, ensure_https
+from authlib.integrations.flask_client import OAuth
 
+from config import get_config
+from .data.cosmos_db_client import CosmosDBClient
+from .auth import auth_bp, init_auth
+from .api import init_api
+from .api.routes import init_routes
+from .auth.oauth import configure_oauth
+from .logging.setup import configure_logging
+from .error_handlers import register_error_handlers
+from .utils.helpers import ensure_https
+
+limiter = Limiter(key_func=get_remote_address)
+cosmos_client = None
 
 def create_app(test_config=None):
     load_dotenv()
@@ -45,20 +56,14 @@ def create_app(test_config=None):
     else:
         app.config.update(test_config)
 
-    if not app.debug:
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
-        file_handler = RotatingFileHandler('logs/application.log', maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-        ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
+    configure_logging(app)
 
-        app.logger.setLevel(logging.INFO)
-        app.logger.info('Application startup')
+    cosmos_client = CosmosDBClient(app)
+    if not hasattr(app, 'auth_initialized'):
+        auth = init_auth(app)
+        app.auth_initialized = True
+    print("After auth initialization")
 
-    # Initialize Limiter
     limiter = Limiter(
         get_remote_address,
         app=app,
@@ -66,27 +71,8 @@ def create_app(test_config=None):
         storage_uri="memory://"
     )
 
-
-    print(f"COSMOS_ENDPOINT: {app.config.get('COSMOS_ENDPOINT')}")
-    print(f"KEY_VAULT_URL: {app.config.get('KEY_VAULT_URL')}")
-    print("Initializing CosmosDBClient")
-    cosmos_client = CosmosDBClient(app)
-    print("CosmosDBClient initialized")
     oauth = OAuth(app)
-    auth = Auth(app, oauth)
-
-    # Configure OAuth for GitHub
-    oauth.register(
-        name='github',
-        client_id=app.config['GITHUB_CLIENT_ID'],
-        client_secret=app.config['GITHUB_CLIENT_SECRET'],
-        access_token_url='https://github.com/login/oauth/access_token',
-        access_token_params=None,
-        authorize_url='https://github.com/login/oauth/authorize',
-        authorize_params=None,
-        api_base_url='https://api.github.com/',
-        client_kwargs={'scope': 'user:email'},
-    )
+    configure_oauth(app, oauth)
 
     # Content Security Policy
     csp = {
@@ -97,35 +83,20 @@ def create_app(test_config=None):
         'img-src': '\'self\' data:',
     }
 
-        # Initialize Talisman with CSP
+    # Initialize Talisman with CSP
     
     Talisman(app, force_https=not app.debug, frame_options='DENY', x_xss_protection=False, 
              strict_transport_security=True, session_cookie_secure=not app.debug, 
              content_security_policy=csp, referrer_policy='strict-origin-when-cross-origin'
             )
 
-    # Register routes
-    app.register_blueprint(routes.init_routes(cosmos_client, auth, limiter))
+    app.register_blueprint(auth_bp, url_prefix='/auth')
+    api_blueprint = init_api(cosmos_client, auth, limiter)  # Initialize API routes
+    app.register_blueprint(api_blueprint, url_prefix='/api')
 
-    @app.errorhandler(404)
-    def not_found(error):
-        app.logger.info(f"404 error occurred: {request.url}")
-        return jsonify({"error": "Not found"}), 404
-
-    @app.errorhandler(401)
-    def unauthorized(error):
-        app.logger.warning(f"Unauthorized access attempt: {request.remote_addr}")
-        return jsonify({"error": "Unauthorized"}), 401
-
-    @app.errorhandler(429)
-    def ratelimit_handler(e):
-        app.logger.warning(f"Rate limit exceeded: {request.remote_addr}")
-        return jsonify({"error": "Rate limit exceeded"}), 429
-
-    @app.errorhandler(500)
-    def internal_error(error):
-        app.logger.error(f"Internal error: {str(error)}")
-        return jsonify({"error": "Internal server error"}), 500
+    register_error_handlers(app)
+    
+    
     
     @app.route('/favicon.ico')
     def favicon():
