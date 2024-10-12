@@ -5,7 +5,9 @@ import tenacity
 from . import api_bp
 from azure.cosmos.exceptions import CosmosHttpResponseError
 from azure.core.exceptions import AzureError
-
+from ..rbac.utils import rbac_required
+from ..models.role import Role
+from ..models.user import User
 
 def init_routes(bp, cosmos_client, auth, limiter):
     print("API routes file is being imported")
@@ -29,6 +31,7 @@ def init_routes(bp, cosmos_client, auth, limiter):
 
     @bp.route('/users', methods=['GET'])
     @auth.require_auth('any')
+    @rbac_required(['read_user'])
     @limiter.limit("100/minute")
     def get_users():
             try:
@@ -51,6 +54,7 @@ def init_routes(bp, cosmos_client, auth, limiter):
     @bp.route('/users', methods=['POST'])
     @auth.require_auth('any')
     @rate_limit_decorator()
+    @rbac_required(['create_user'])
     @exponential_backoff
     def create_user():
         new_user = request.json
@@ -124,10 +128,23 @@ def init_routes(bp, cosmos_client, auth, limiter):
             return jsonify({"status": "secure", "protocol": "HTTPS"}), 200
         else:
             return jsonify({"status": "not secure", "protocol": "HTTP"}), 200
-        
-    @bp.route('/test')
-    def test_route():
-        return "Test route is working!"
+    
+    @bp.route('/roles', methods=['GET'])
+    @auth.require_auth('any')
+    @rbac_required(['manage_roles'])
+    def get_roles():
+        roles = cosmos_client.get_all_roles()
+        return jsonify([role.to_dict() for role in roles]), 200
+
+    @bp.route('/roles', methods=['POST'])
+    @auth.require_auth('any')
+    @rbac_required(['manage_roles'])
+    def create_role():
+        data = request.json
+        new_role = Role(data['name'], data['permissions'])
+        created_role = cosmos_client.create_role(new_role)
+        return jsonify(created_role.to_dict()), 201
+    
     
 
     return api_bp

@@ -5,6 +5,8 @@ from ..security.encryption import Encryptor
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import base64
+from ..models.role import Role
+from ..models.user import User
 
 
 class CosmosDBClient:
@@ -131,3 +133,43 @@ class CosmosDBClient:
         new_version = self.encryptor.rotate_key()
         self.re_encrypt_all_items()
         return new_version
+    
+
+    def get_all_roles(self):
+        query = "SELECT * FROM c WHERE c.type = 'role'"
+        items = list(self.container.query_items(query=query, enable_cross_partition_query=True))
+        return [Role.from_dict(item) for item in items]
+
+    def create_role(self, role):
+        role_dict = role.to_dict()
+        role_dict['type'] = 'role'  # Add a type field to distinguish roles from other documents
+        created_item = self.container.create_item(body=role_dict)
+        return Role.from_dict(created_item)
+
+    def get_role_by_name(self, name):
+        query = f"SELECT * FROM c WHERE c.type = 'role' AND c.name = @name"
+        parameters = [{"name": "@name", "value": name}]
+        items = list(self.container.query_items(query=query, parameters=parameters, enable_cross_partition_query=True))
+        return Role.from_dict(items[0]) if items else None
+
+    def update_role(self, role):
+        role_dict = role.to_dict()
+        role_dict['type'] = 'role'
+        updated_item = self.container.upsert_item(body=role_dict)
+        return Role.from_dict(updated_item)
+
+    def delete_role(self, role_id):
+        self.container.delete_item(item=role_id, partition_key=role_id)
+
+    # Update user-related methods to handle roles
+    def create_user(self, user):
+        user_dict = user.to_dict()
+        user_dict['type'] = 'user'  # Add a type field to distinguish users from other documents
+        created_item = self.container.create_item(body=user_dict)
+        return User.from_dict(created_item)
+
+    def get_user_by_username(self, username):
+        query = f"SELECT * FROM c WHERE c.type = 'user' AND c.username = @username"
+        parameters = [{"name": "@username", "value": username}]
+        items = list(self.container.query_items(query=query, parameters=parameters, enable_cross_partition_query=True))
+        return User.from_dict(items[0]) if items else None
